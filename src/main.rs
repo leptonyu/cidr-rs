@@ -127,13 +127,8 @@ impl ToString for Subnet {
     }
 }
 
+#[derive(Default)]
 struct SubnetList(BTreeSet<Subnet>);
-
-impl Default for SubnetList {
-    fn default() -> Self {
-        Self(Default::default())
-    }
-}
 
 impl SubnetList {
     pub fn read_stdin(&mut self) -> Result<(), ConfigError> {
