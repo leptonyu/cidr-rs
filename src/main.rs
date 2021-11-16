@@ -34,10 +34,10 @@ impl Subnet {
             s = &s[0..i];
         }
         let addr: Ipv4Addr = s.parse()?;
-        let [a, b, c, d] = addr.octets();
-        let mut net = ((a as u32) << 24) + ((b as u32) << 16) + ((c as u32) << 8) + (d as u32);
-        let m = 32 - mask;
-        net = (net >> m) << m;
+        let [a1, b2, c3, d4] = addr.octets();
+        let mut net = ((a1 as u32) << 24) + ((b2 as u32) << 16) + ((c3 as u32) << 8) + (d4 as u32);
+        let mk = 32 - mask;
+        net = (net >> mk) << mk;
         Ok(Some(Self { net, mask }))
     }
 
@@ -84,7 +84,7 @@ impl Subnet {
     fn prepare_str(mut s: &str) -> &str {
         s = s.trim();
         if let Some(i) = s.find('#') {
-            s = &s[0..i].trim();
+            s = s[0..i].trim();
         }
         s
     }
