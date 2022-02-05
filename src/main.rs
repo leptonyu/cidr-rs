@@ -30,7 +30,7 @@ impl Subnet {
         }
         let mut mask: u8 = 32;
         if let Some(i) = s.find('/') {
-            mask = (&s[i + 1..]).parse()?;
+            mask = (s[i + 1..]).parse()?;
             s = &s[0..i];
         }
         let addr: Ipv4Addr = s.parse()?;
