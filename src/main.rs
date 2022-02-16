@@ -17,12 +17,21 @@ fn main() -> Result<(), ConfigError> {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-struct Subnet {
-    net: u32,
+struct Subnet<T> {
+    net: T,
     mask: u8,
 }
 
-impl Subnet {
+trait SubnetT : Sized{
+    fn parse_subnet(s: &str) -> Result<Option<Self>, ConfigError>;
+
+    fn max_len() -> u8;
+}
+
+impl SubnetT for Subnet<u32> {
+    fn max_len() -> u8 {
+        32
+    }
     fn parse_subnet(mut s: &str) -> Result<Option<Self>, ConfigError> {
         s = Self::prepare_str(s);
         if s.is_empty() {
@@ -40,8 +49,10 @@ impl Subnet {
         net = (net >> mk) << mk;
         Ok(Some(Self { net, mask }))
     }
+}
 
-    fn parse_range(s: &str, v: &mut SubnetList) -> Result<(), ConfigError> {
+impl Subnet<u32> {
+    fn parse_range(s: &str, v: &mut SubnetList<u32>) -> Result<(), ConfigError> {
         let split: Vec<&str> = Self::prepare_str(s).split('|').take(2).collect();
         let mut from = Subnet::parse_subnet(split[0])?
             .ok_or(ConfigError::RefValueRecursiveError)?
@@ -89,7 +100,7 @@ impl Subnet {
         s
     }
 
-    fn parse(s: &str, vec: &mut SubnetList) -> Result<(), ConfigError> {
+    fn parse(s: &str, vec: &mut SubnetList<u32>) -> Result<(), ConfigError> {
         if s.contains('|') {
             Self::parse_range(s, vec)?
         } else if let Some(x) = Self::parse_subnet(s)? {
@@ -116,7 +127,7 @@ impl Subnet {
     }
 }
 
-impl ToString for Subnet {
+impl ToString for Subnet<u32> {
     fn to_string(&self) -> String {
         let net = self.net;
         let a = net >> 24;
@@ -128,9 +139,9 @@ impl ToString for Subnet {
 }
 
 #[derive(Default)]
-struct SubnetList(BTreeSet<Subnet>);
+struct SubnetList<T>(BTreeSet<Subnet<T>>);
 
-impl SubnetList {
+impl SubnetList<u32> {
     pub fn read_stdin(&mut self) -> Result<(), ConfigError> {
         let stdin = std::io::stdin();
         for line in stdin.lock().lines() {
@@ -139,13 +150,13 @@ impl SubnetList {
         Ok(())
     }
 
-    pub fn insert(&mut self, subnet: Subnet) -> bool {
+    pub fn insert(&mut self, subnet: Subnet<u32>) -> bool {
         self.0.insert(subnet)
     }
 
     pub fn shrink(&mut self) {
         let mut vec = vec![];
-        let mut last: Option<Subnet> = None;
+        let mut last: Option<Subnet<u32>> = None;
         for i in self.0.iter() {
             if let Some(l) = &last {
                 if l.contains(i) {
@@ -159,12 +170,12 @@ impl SubnetList {
         self.0.extend(vec);
     }
 
-    pub fn iter(&self) -> Iter<Subnet> {
+    pub fn iter(&self) -> Iter<Subnet<u32>> {
         self.0.iter()
     }
 }
 
-fn merge_vec(vec: &mut Vec<Subnet>, mut i: Subnet) {
+fn merge_vec(vec: &mut Vec<Subnet<u32>>, mut i: Subnet<u32>) {
     while let Some(mut l) = vec.pop() {
         if l.is_next(&i) {
             l.mask -= 1;
@@ -182,6 +193,7 @@ mod tests {
 
     use cfg_rs::ConfigError;
 
+use crate::SubnetT;
     use crate::{Subnet, SubnetList};
 
     macro_rules! assert_empty {
