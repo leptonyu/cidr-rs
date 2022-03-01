@@ -14,9 +14,9 @@ dependencies = [
 
 [[package]]
 name = "cfg-rs"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ababb198289eed42a9587b380dd0152bc824cb87fbb2a4d62e93ad1e6206baa5"
+checksum = "f43ba3f0ff09e17280f05794184ec9c623aa3fd1fae0b14b5b760597207685b9"
 dependencies = [
  "cfg-derive",
 ]
