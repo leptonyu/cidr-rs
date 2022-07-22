@@ -172,7 +172,8 @@ struct SubnetList(BTreeSet<Subnet>);
 impl SubnetList {
     pub fn read_stdin(&mut self) -> Result<(), ConfigError> {
         let stdin = std::io::stdin();
-        for line in stdin.lock().lines() {
+        let lines = stdin.lock().lines();
+        for line in lines {
             Subnet::parse(&line?, self).ok();
         }
         Ok(())
