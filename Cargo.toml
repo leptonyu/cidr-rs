@@ -11,7 +11,7 @@ codegen-units = 1
 opt-level = "s"
 
 [dependencies]
-cfg-rs = "^0.2"
+cfg-rs = "^0.3"
 
 [[bin]]
 name = "cidr"
