@@ -9,6 +9,7 @@ version = "0.1.0"
 lto = true
 codegen-units = 1
 opt-level = "s"
+strip = true
 
 [dependencies]
 cfg-rs = "^0.3"

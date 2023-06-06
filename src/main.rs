@@ -22,7 +22,52 @@ struct Subnet {
     mask: u8,
 }
 
+macro_rules! common_parse_fn {
+    ($tp:ident, $tpa:ident , $mp:literal, $name: ident, $new: ident, $try_ip: ident) => {
+        fn $name(v: &mut SubnetList, mut from: $tp, mut to: $tp) -> Result<(), ConfigError> {
+            let mut mask = $mp;
+            while from <= to {
+                if from == to {
+                    v.insert(Subnet::$new(from << ($mp - mask), mask));
+                    break;
+                }
+                if from & 1 == 1 {
+                    v.insert(Subnet::$new(from << ($mp - mask), mask));
+                    from += 1;
+                }
+                if to & 1 == 0 {
+                    v.insert(Subnet::$new(to << ($mp - mask), mask));
+                    to -= 1;
+                }
+                while from & 1 == 0 && to & 1 == 1 {
+                    mask -= 1;
+                    from >>= 1;
+                    to >>= 1;
+                }
+            }
+            Ok(())
+        }
+
+        fn $try_ip(s: &str, mask: Option<u8>) -> Result<Option<Self>, ConfigError> {
+            let mask = mask.unwrap_or($mp);
+            let addr: $tpa = s.parse()?;
+            let net: $tp = $tp::from(addr);
+            let mk = $mp - mask;
+            Ok(Some(Self::$new((net >> mk) << mk, mask)))
+        }
+    };
+}
 impl Subnet {
+    fn new_v4(net: u32, mask: u8) -> Self {
+        Self { net: Ok(net), mask }
+    }
+    fn new_v6(net: u128, mask: u8) -> Self {
+        Self {
+            net: Err(net),
+            mask,
+        }
+    }
+
     fn parse_subnet(mut s: &str) -> Result<Option<Self>, ConfigError> {
         s = Self::prepare_str(s);
         if s.is_empty() {
@@ -36,67 +81,23 @@ impl Subnet {
         Self::try_ipv4(s, mask).or_else(|_| Self::try_ipv6(s, mask))
     }
 
-    fn try_ipv4(s: &str, mask: Option<u8>) -> Result<Option<Self>, ConfigError> {
-        let mask = mask.unwrap_or(32);
-        let addr: Ipv4Addr = s.parse()?;
-        let net = u32::from(addr);
-        let mk = 32 - mask;
-        Ok(Some(Self {
-            net: Ok((net >> mk) << mk),
-            mask,
-        }))
-    }
+    common_parse_fn!(u32, Ipv4Addr, 32, parse_ipv4_range, new_v4, try_ipv4);
+    common_parse_fn!(u128, Ipv6Addr, 128, parse_ipv6_range, new_v6, try_ipv6);
 
-    fn try_ipv6(s: &str, mask: Option<u8>) -> Result<Option<Self>, ConfigError> {
-        let mask = mask.unwrap_or(128);
-        let addr: Ipv6Addr = s.parse()?;
-        let net: u128 = u128::from(addr);
-        let mk = 128 - mask;
-        Ok(Some(Self {
-            net: Err((net >> mk) << mk),
-            mask,
-        }))
+    fn parse_range(s: &str, v: &mut SubnetList) -> Result<(), ConfigError> {
+        let split: Vec<&str> = Self::prepare_str(s).split(',').take(2).collect();
+        let from = Subnet::parse_subnet(split[0])?
+            .ok_or(ConfigError::RefValueRecursiveError)?
+            .net;
+        let to = Subnet::parse_subnet(split[1])?
+            .ok_or(ConfigError::RefValueRecursiveError)?
+            .net;
+        match (from, to) {
+            (Ok(from), Ok(to)) => Self::parse_ipv4_range(v, from, to),
+            (Err(from), Err(to)) => Self::parse_ipv6_range(v, from, to),
+            _ => panic!("Error"),
+        }
     }
-
-    // fn parse_range(s: &str, v: &mut SubnetList) -> Result<(), ConfigError> {
-    //     let split: Vec<&str> = Self::prepare_str(s).split('|').take(2).collect();
-    //     let mut from = Subnet::parse_subnet(split[0])?
-    //         .ok_or(ConfigError::RefValueRecursiveError)?
-    //         .net;
-    //     let mut to = Subnet::parse_subnet(split[1])?
-    //         .ok_or(ConfigError::RefValueRecursiveError)?
-    //         .net;
-    //     let mut mask: u8 = 32;
-    //     while from <= to {
-    //         if from == to {
-    //             v.insert(Self {
-    //                 net: from << (32 - mask),
-    //                 mask,
-    //             });
-    //             break;
-    //         }
-    //         if from & 1 == 1 {
-    //             v.insert(Self {
-    //                 net: from << (32 - mask),
-    //                 mask,
-    //             });
-    //             from += 1;
-    //         }
-    //         if to & 1 == 0 {
-    //             v.insert(Self {
-    //                 net: to << (32 - mask),
-    //                 mask,
-    //             });
-    //             to -= 1;
-    //         }
-    //         while from & 1 == 0 && to & 1 == 1 {
-    //             mask -= 1;
-    //             from >>= 1;
-    //             to >>= 1;
-    //         }
-    //     }
-    //     Ok(())
-    // }
 
     fn prepare_str(mut s: &str) -> &str {
         s = s.trim();
@@ -107,9 +108,9 @@ impl Subnet {
     }
 
     fn parse(s: &str, vec: &mut SubnetList) -> Result<(), ConfigError> {
-        // if s.contains('|') {
-        //     Self::parse_range(s, vec)?
-        // } else
+        if s.contains(',') {
+            return Self::parse_range(s, vec);
+        }
         if let Some(x) = Self::parse_subnet(s)? {
             vec.insert(x);
         }
@@ -281,13 +282,17 @@ mod tests {
         Ok(())
     }
 
-    // #[test]
-    // fn range_test() -> Result<(), ConfigError> {
-    //     let mut list = SubnetList::default();
-    //     Subnet::parse("223.255.229.0|223.255.230.255|", &mut list)?;
-    //     for x in list.iter() {
-    //         println!("{}", x.to_string());
-    //     }
-    //     Ok(())
-    // }
+    #[test]
+    fn range_test() -> Result<(), ConfigError> {
+        let mut list = SubnetList::default();
+        Subnet::parse("223.255.229.0,223.255.230.255,", &mut list)?;
+        Subnet::parse(
+            "2c0f:fc00:b011::,2c0f:fc00:b011:ffff:ffff:ffff:ffff:ffff,",
+            &mut list,
+        )?;
+        for x in list.iter() {
+            println!("{}", x.to_string());
+        }
+        Ok(())
+    }
 }
