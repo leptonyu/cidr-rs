@@ -48,9 +48,14 @@ jobs:
           cargo build --target ${{ matrix.profile.target }} --verbose --release
       - name: Pack
         if: ${{startsWith(github.ref, 'refs/tags/v')}}
-        run: cd target/${{ matrix.profile.target }}/release && tar -cJf ../../cidr.${{ matrix.profile.target }}.tar.xz cidr
+        run: |
+          DIR=$(pwd)
+          cd target/${{ matrix.profile.target }}/release && tar -cJf ../../cidr.${{ matrix.profile.target }}.tar.xz cidr
+          cd $DIR
+          export PATH=$PATH:$DIR/target/${{ matrix.profile.target }}/release
       - name: Upload a Build Artifact
         if: ${{startsWith(github.ref, 'refs/tags/v')}}
         uses: softprops/action-gh-release@v1
         with:
-          files: target/cidr.${{ matrix.profile.target }}.tar.xz
+          files: |
+            target/cidr.${{ matrix.profile.target }}.tar.xz
