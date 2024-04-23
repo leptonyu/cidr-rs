@@ -6,11 +6,17 @@ use std::{
 };
 
 use cfg_rs::*;
+#[cfg(target_env = "musl")]
+#[global_allocator]
+//static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[derive(FromConfig, Debug)]
 pub struct Config {
     #[config(default = false)]
     reverse: bool,
+    #[config(default = true)]
+    merge: bool,
     exclude: Option<String>,
 }
 
@@ -19,7 +25,7 @@ fn main() -> Result<(), ConfigError> {
     let conf: Config = config.get("")?;
     let mut list = SubnetList::default();
     // println!("{:?}", conf);
-    list.read_stdin(conf.reverse, conf.exclude)?;
+    list.read_stdin(conf.reverse, conf.exclude, conf.merge)?;
     for subnet in list.iter() {
         println!("{}", subnet.to_string());
     }
@@ -245,13 +251,14 @@ impl SubnetList {
         &mut self,
         reverse: bool,
         exclude: Option<String>,
+        merge: bool,
     ) -> Result<(), ConfigError> {
         let stdin = std::io::stdin();
         let lines = stdin.lock().lines();
         for line in lines {
             Subnet::parse(&line?, self, None).ok();
         }
-        self.shrink();
+        self.shrink(true);
         if let Some(file) = exclude {
             let mut file = File::open(file)?;
             let mut buf = String::new();
@@ -260,8 +267,8 @@ impl SubnetList {
             for line in buf.lines() {
                 Subnet::parse(line, &mut new, None).ok();
             }
-            new.shrink();
-            self.merge(new);
+            new.shrink(true);
+            self.merge(new, merge);
         } else if reverse {
             let ret = self.gap();
             let _ = std::mem::replace(self, ret);
@@ -270,26 +277,26 @@ impl SubnetList {
         Ok(())
     }
 
-    fn merge(&mut self, new: SubnetList) {
+    fn merge(&mut self, new: SubnetList, merge: bool) {
         for mut item in new.gap().0.into_iter() {
             item.tag = 1;
             self.insert(item);
         }
-        self.shrink();
+        self.shrink(merge);
     }
 
     pub fn insert(&mut self, subnet: Subnet) -> bool {
         self.0.insert(subnet)
     }
 
-    pub fn shrink(&mut self) {
+    pub fn shrink(&mut self, merge: bool) {
         let mut vec: Vec<Subnet> = vec![];
         let mut last: Option<Subnet> = None;
         for i in self.0.iter() {
             if let Some(l) = &mut last {
                 if l.contains(i) {
                     let len = vec.len();
-                    vec[len - 1].tag = 0;
+                    vec[len - 1].tag = if merge { 0 } else { 2 };
                     continue;
                 }
             }
@@ -413,7 +420,7 @@ mod tests {
         for x in set.iter() {
             println!("{}", x.to_string());
         }
-        set.shrink();
+        set.shrink(true);
         println!("------ Shrink List");
         for x in set.iter() {
             println!("{}", x.to_string());
@@ -458,15 +465,15 @@ mod tests {
         insert!(list. "1.1.3.0/24");
         insert!(list. "2.2.2.0/24");
         insert!(list. "2.3.2.0/24");
-        list.shrink();
+        list.shrink(true);
         print_list(&list);
         let mut excl = SubnetList::default();
         insert!(excl. "0.0.0.0/8");
         insert!(excl. "1.1.2.0/24");
-        excl.shrink();
+        excl.shrink(true);
         println!("------ Gap List");
         print_list(&excl.gap());
-        list.merge(excl);
+        list.merge(excl, false);
         println!("------ Mergr List");
         print_list(&list);
         Ok(())

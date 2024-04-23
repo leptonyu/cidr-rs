@@ -13,6 +13,9 @@ strip = true
 
 [dependencies]
 cfg-rs = "^0.3"
+[target.'cfg(target_env = "musl")'.dependencies]
+#tikv-jemallocator = "^0.5"
+mimalloc = "^0.1"
 
 [[bin]]
 name = "cidr"
