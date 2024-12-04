@@ -18,6 +18,8 @@ pub struct Config {
     #[config(default = true)]
     merge: bool,
     exclude: Option<String>,
+    prefix_v4: Option<u8>,
+    prefix_v6: Option<u8>,
 }
 
 fn main() -> Result<(), ConfigError> {
@@ -27,6 +29,32 @@ fn main() -> Result<(), ConfigError> {
     // println!("{:?}", conf);
     list.read_stdin(conf.reverse, conf.exclude, conf.merge)?;
     for subnet in list.iter() {
+        match subnet.net {
+            Ok(net) => {
+                if let Some(prefix) = conf.prefix_v4 {
+                    if prefix <= 32 && prefix > subnet.mask {
+                        let count: u32 = 1 << (prefix - subnet.mask);
+                        for i in 0..count {
+                            let sub = Subnet::new_v4(net + (i << (32 - prefix)), prefix);
+                            println!("{}", sub.to_string());
+                        }
+                        continue;
+                    }
+                }
+            }
+            Err(net) => {
+                if let Some(prefix) = conf.prefix_v6 {
+                    if prefix <= 128 && prefix > subnet.mask {
+                        let count: u128 = 1 << (prefix - subnet.mask);
+                        for i in 0..count {
+                            let sub = Subnet::new_v6(net + (i << (128 - prefix)), prefix);
+                            println!("{}", sub.to_string());
+                        }
+                        continue;
+                    }
+                }
+            }
+        }
         println!("{}", subnet.to_string());
     }
     Ok(())
